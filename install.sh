@@ -9129,6 +9129,13 @@ installSubscribe() {
         echoContent yellow "开始配置订阅，请输入订阅的端口\n"
 
         mapfile -t result < <(initSingBoxPort "${subscribePort}")
+        if [[ -z "${result[-1]}" ]]; then
+            # 兜底：如果端口获取失败，随机生成一个
+            result[-1]=$((RANDOM % 50001 + 10000))
+            echoContent yellow " ---> 端口获取失败，随机分配端口: ${result[-1]}"
+            allowPort "${result[-1]}"
+            allowPort "${result[-1]}" "udp"
+        fi
         echo
         echoContent yellow " ---> 开始配置订阅的伪装站点\n"
         nginxBlog
