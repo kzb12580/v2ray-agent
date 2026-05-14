@@ -1760,7 +1760,11 @@ customSSLEmail() {
 
     if [[ -d "/root/.acme.sh" && -f "/root/.acme.sh/account.conf" ]]; then
         if ! grep -q "ACCOUNT_EMAIL" <"/root/.acme.sh/account.conf" && ! echo "${sslType}" | grep -q "letsencrypt"; then
-            read -r -p "请输入邮箱地址:" sslEmail
+            read -r -p "请输入注册邮箱（回车跳过则自动生成虚拟邮箱）:" sslEmail
+            if [[ -z "${sslEmail}" ]]; then
+                sslEmail="$(date +%s%N | md5sum | cut -c 1-6)@gmail.com"
+                echoContent yellow " ---> 自动生成虚拟邮箱: ${sslEmail}"
+            fi
             if echo "${sslEmail}" | grep -q "@"; then
                 echo "ACCOUNT_EMAIL='${sslEmail}'" >>/root/.acme.sh/account.conf
                 echoContent green " ---> 添加完毕"
@@ -1805,9 +1809,27 @@ checkDomainResolution() {
     v4=$(curl -s4m5 icanhazip.com -k 2>/dev/null)
     v6=$(curl -s6m5 icanhazip.com -k 2>/dev/null)
 
-    domainIP=$(dig @8.8.8.8 +time=2 +short "$1" 2>/dev/null | grep -m1 '^[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+$')
+    # Freenom 免费域名检测
+    local tld
+    tld=$(echo "$1" | awk -F '.' '{print $NF}')
+    if [[ "${tld}" =~ ^(tk|ga|gq|ml|cf)$ ]]; then
+        echoContent yellow " ---> 检测到Freenom免费域名(${tld})，不支持DNS API模式"
+        echoContent yellow " ---> 建议使用80端口独立模式申请证书"
+        return 1
+    fi
+
+    # 提取主域名用于DNS查询（支持二级/三级域名）
+    local queryDomain="$1"
+    local domainPartCount
+    domainPartCount=$(echo "$1" | awk -F '.' '{print NF}')
+    # 三级域名以上只查询根域名
+    if [[ ${domainPartCount} -gt 2 ]]; then
+        queryDomain=$(echo "$1" | awk -F '.' '{print $(NF-1)"."$NF}')
+    fi
+
+    domainIP=$(dig @8.8.8.8 +time=2 +short "${queryDomain}" 2>/dev/null | grep -m1 '^[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+$')
     if [[ -z "${domainIP}" ]]; then
-        domainIP=$(dig @2001:4860:4860::8888 +time=2 aaaa +short "$1" 2>/dev/null | grep -m1 ':')
+        domainIP=$(dig @2001:4860:4860::8888 +time=2 aaaa +short "${queryDomain}" 2>/dev/null | grep -m1 ':')
     fi
 
     if [[ -z "${domainIP}" ]]; then
@@ -2152,7 +2174,20 @@ installTLS() {
         if [[ ! -f "/etc/v2ray-agent/tls/${tlsDomain}.crt" || ! -f "/etc/v2ray-agent/tls/${tlsDomain}.key" ]] || [[ -z $(cat "/etc/v2ray-agent/tls/${tlsDomain}.key") || -z $(cat "/etc/v2ray-agent/tls/${tlsDomain}.crt") ]]; then
             tail -n 10 /etc/v2ray-agent/tls/acme.log
             if [[ ${installTLSCount} == "1" ]]; then
-                echoContent red " ---> TLS安装失败，请检查acme日志"
+                echoContent red " ---> TLS安装失败，请检查acme日志: /etc/v2ray-agent/tls/acme.log"
+                echoContent yellow " ---> 常见原因及解决方案："
+                echoContent yellow "     1. 域名解析IP与VPS本地IP不一致"
+                echoContent yellow "        → 确保CF CDN黄云已关闭（仅DNS），解析IP必须是VPS本地IP"
+                echoContent yellow "     2. 同一IP短时间内多次申请触发频率限制"
+                echoContent yellow "        → 等待1-2小时后重试，或更换二级域名前缀"
+                echoContent yellow "     3. Freenom免费域名(.tk/.ga/.gq/.ml/.cf)不支持DNS API"
+                echoContent yellow "        → 改用80端口独立模式申请"
+                echoContent yellow "     4. WARP导致IP判断异常"
+                echoContent yellow "        → 手动关闭WARP: systemctl stop wg-quick@wgcf"
+                echoContent yellow "     5. 80端口被占用（独立模式）"
+                echoContent yellow "        → 检查: lsof -i :80，停止占用进程"
+                echoContent yellow "     6. 通配符域名格式错误"
+                echoContent yellow "        → 输入格式: *.example.com（注意星号和点）"
                 warpAutoRestore
                 exit 0
             fi
@@ -2165,6 +2200,16 @@ installTLS() {
                 echo
                 customSSLEmail "validate email"
                 installTLS "$1"
+            elif tail -n 10 /etc/v2ray-agent/tls/acme.log | grep -q "too many certificates already issued"; then
+                echoContent red " ---> 该域名申请证书次数过多，已触发Let's Encrypt频率限制"
+                echoContent yellow " ---> 建议：更换二级域名前缀，或等待一周后重试"
+                warpAutoRestore
+                exit 0
+            elif tail -n 10 /etc/v2ray-agent/tls/acme.log | grep -q "DNS problem"; then
+                echoContent red " ---> DNS解析异常，请检查域名DNS设置"
+                echoContent yellow " ---> 确保域名已正确解析到VPS IP，且CDN黄云已关闭"
+                warpAutoRestore
+                exit 0
             else
                 installTLS "$1"
             fi
