@@ -2042,6 +2042,81 @@ setupCertRenewalCron() {
     echoContent green " ---> 证书自动续期已设置（每天0点检查）"
 }
 
+# 证书申请结果验证（整合自 acme-yg checktls）
+verifyCertificate() {
+    local tlsCertPath="/etc/v2ray-agent/tls/${tlsDomain}.crt"
+    local tlsKeyPath="/etc/v2ray-agent/tls/${tlsDomain}.key"
+
+    if [[ -f "${tlsCertPath}" && -f "${tlsKeyPath}" && -s "${tlsCertPath}" && -s "${tlsKeyPath}" ]]; then
+        echoContent green " ---> 域名证书申请成功！"
+        echoContent yellow " ---> 公钥文件(crt)路径："
+        echoContent green "     ${tlsCertPath}"
+        echoContent yellow " ---> 密钥文件(key)路径："
+        echoContent green "     ${tlsKeyPath}"
+
+        # 显示证书到期时间
+        local expireDate
+        expireDate=$(openssl x509 -in "${tlsCertPath}" -noout -enddate 2>/dev/null | cut -d= -f2)
+        if [[ -n "${expireDate}" ]]; then
+            echoContent yellow " ---> 证书到期时间：${expireDate}"
+        fi
+
+        # 显示已申请的域名列表
+        if [[ -f "$HOME/.acme.sh/acme.sh" ]]; then
+            echoContent skyBlue " ---> 已申请的证书列表："
+            bash "$HOME/.acme.sh/acme.sh" --list 2>/dev/null
+        fi
+    else
+        echoContent red " ---> 证书文件验证失败，请检查acme日志"
+        tail -n 20 /etc/v2ray-agent/tls/acme.log 2>/dev/null
+    fi
+}
+
+# 卸载证书并清理acme（整合自 acme-yg uninstall）
+uninstallCertificate() {
+    if [[ ! -f "$HOME/.acme.sh/acme.sh" ]]; then
+        echoContent yellow " ---> 未安装acme.sh，无需卸载"
+        return
+    fi
+
+    echoContent yellow " ---> 当前已申请的证书："
+    bash "$HOME/.acme.sh/acme.sh" --list 2>/dev/null
+
+    echo
+    read -r -p "确认卸载所有证书并删除acme.sh？[y/n]:" confirmUninstall
+    if [[ "${confirmUninstall}" != "y" ]]; then
+        echoContent yellow " ---> 已取消"
+        return
+    fi
+
+    # 撤销并删除所有证书
+    local domains
+    domains=$(bash "$HOME/.acme.sh/acme.sh" --list 2>/dev/null | tail -n +2 | awk '{print $1}')
+    for domain in ${domains}; do
+        echoContent yellow " ---> 撤销证书: ${domain}"
+        bash "$HOME/.acme.sh/acme.sh" --revoke -d "${domain}" --ecc 2>/dev/null
+        bash "$HOME/.acme.sh/acme.sh" --remove -d "${domain}" --ecc 2>/dev/null
+    done
+
+    # 卸载 acme.sh
+    bash "$HOME/.acme.sh/acme.sh" --uninstall 2>/dev/null
+    rm -rf "$HOME/.acme.sh" acme.sh
+    rm -rf /etc/v2ray-agent/tls/*.crt /etc/v2ray-agent/tls/*.key
+
+    # 清理 cron
+    crontab -l 2>/dev/null | grep -v "acme.sh" | crontab - 2>/dev/null
+
+    # 清理 bashrc
+    sed -i '/acme.sh.env/d' ~/.bashrc 2>/dev/null
+    source ~/.bashrc 2>/dev/null
+
+    if [[ ! -f "$HOME/.acme.sh/acme.sh" ]]; then
+        echoContent green " ---> 证书和acme.sh已完全卸载"
+    else
+        echoContent red " ---> acme.sh卸载可能未完全成功，请手动检查"
+    fi
+}
+
 # 自定义端口
 customPortFunction() {
     local historyCustomPortStatus=
@@ -2219,6 +2294,7 @@ installTLS() {
         setupCertRenewalCron
 
         echoContent green " ---> TLS生成成功"
+        verifyCertificate
     else
         echoContent yellow " ---> 未安装acme.sh"
         warpAutoRestore
