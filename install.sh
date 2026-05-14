@@ -7724,6 +7724,121 @@ warpRoutingReg() {
     reloadCore
 }
 
+# 刷新本地IP，调整IPV4/IPV6配置输出
+refreshIP() {
+    echoContent skyBlue "\n功能 1/1 : 刷新本地IP，调整IPV4/IPV6配置输出"
+    echoContent red "\n=============================================================="
+
+    # 检测本地IP
+    local v4=$(curl -s4m5 icanhazip.com -k 2>/dev/null)
+    local v6=$(curl -s6m5 icanhazip.com -k 2>/dev/null)
+
+    if [[ -z "${v4}" && -z "${v6}" ]]; then
+        echoContent red " ---> 无法获取本地IP地址"
+        return 1
+    fi
+
+    echoContent yellow "当前本地IP信息："
+    if [[ -n "${v4}" ]]; then
+        echoContent green " ---> IPv4: ${v4}"
+    else
+        echoContent yellow " ---> IPv4: 无"
+    fi
+    if [[ -n "${v6}" ]]; then
+        echoContent green " ---> IPv6: ${v6}"
+    else
+        echoContent yellow " ---> IPv6: 无"
+    fi
+
+    echoContent red "\n=============================================================="
+    if [[ -n "${v4}" && -n "${v6}" ]]; then
+        echoContent yellow "1. IPV4优先出站"
+        echoContent yellow "2. IPV6优先出站"
+        echoContent yellow "3. 仅IPV4出站"
+        echoContent yellow "4. 仅IPV6出站"
+        echoContent red "=============================================================="
+        read -r -p "请选择:" chooseIPType
+
+        local domainStrategy=""
+        case ${chooseIPType} in
+        1)
+            domainStrategy="prefer_ipv4"
+            ;;
+        2)
+            domainStrategy="prefer_ipv6"
+            ;;
+        3)
+            domainStrategy="ipv4_only"
+            ;;
+        4)
+            domainStrategy="ipv6_only"
+            ;;
+        *)
+            echoContent red " ---> 选择错误"
+            return 1
+            ;;
+        esac
+    elif [[ -n "${v4}" ]]; then
+        echoContent yellow " ---> 当前仅检测到IPv4，自动设置为仅IPV4出站"
+        domainStrategy="ipv4_only"
+    else
+        echoContent yellow " ---> 当前仅检测到IPv6，自动设置为仅IPV6出站"
+        domainStrategy="ipv6_only"
+    fi
+
+    # 更新sing-box配置
+    if [[ -n "${singBoxConfigPath}" ]]; then
+        # 更新所有direct出站的domain_strategy
+        for configFile in ${singBoxConfigPath}*.json; do
+            if [[ -f "${configFile}" ]] && jq -e '.outbounds[0].type == "direct"' "${configFile}" >/dev/null 2>&1; then
+                local currentStrategy=$(jq -r '.outbounds[0].domain_strategy // empty' "${configFile}" 2>/dev/null)
+                if [[ -n "${currentStrategy}" ]]; then
+                    jq ".outbounds[0].domain_strategy = "${domainStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
+                    echoContent green " ---> 已更新 $(basename ${configFile}): ${currentStrategy} -> ${domainStrategy}"
+                fi
+            fi
+        done
+    fi
+
+    # 更新xray配置
+    if [[ -n "${configPath}" ]]; then
+        for configFile in ${configPath}*.json; do
+            if [[ -f "${configFile}" ]] && jq -e '.outbounds[0].protocol == "freedom"' "${configFile}" >/dev/null 2>&1; then
+                local currentStrategy=$(jq -r '.outbounds[0].settings.domainStrategy // empty' "${configFile}" 2>/dev/null)
+                if [[ -n "${currentStrategy}" ]]; then
+                    local xrayStrategy=""
+                    case ${domainStrategy} in
+                    "prefer_ipv4")
+                        xrayStrategy="UseIPv4"
+                        ;;
+                    "prefer_ipv6")
+                        xrayStrategy="UseIPv6"
+                        ;;
+                    "ipv4_only")
+                        xrayStrategy="ForceIPv4"
+                        ;;
+                    "ipv6_only")
+                        xrayStrategy="ForceIPv6"
+                        ;;
+                    esac
+                    jq ".outbounds[0].settings.domainStrategy = "${xrayStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
+                    echoContent green " ---> 已更新 $(basename ${configFile}): ${currentStrategy} -> ${xrayStrategy}"
+                fi
+            fi
+        done
+    fi
+
+    echoContent green "\n ---> IP配置更新完成"
+    echoContent yellow " ---> 当前策略: ${domainStrategy}"
+    echoContent yellow " ---> 需要重启服务才能生效"
+
+    read -r -p "是否现在重启服务？[y/n]:" restartStatus
+    if [[ "${restartStatus}" == "y" ]]; then
+        reloadCore
+        echoContent green " ---> 服务重启完成"
+    fi
+}
+
 # 分流工具
 routingToolsMenu() {
     echoContent skyBlue "\n功能 1/${totalProgress} : 分流工具"
@@ -10343,6 +10458,7 @@ menu() {
     echoContent yellow "11.分流工具"
     echoContent yellow "12.添加新端口"
     echoContent yellow "13.BT下载管理"
+    echoContent yellow "14.IP配置管理"
     echoContent yellow "15.域名黑名单"
     echoContent skyBlue "-------------------------版本管理-----------------------------"
     echoContent yellow "16.core管理"
