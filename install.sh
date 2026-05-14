@@ -7709,9 +7709,11 @@ refreshIP() {
         for configFile in ${singBoxConfigPath}*.json; do
             if [[ -f "${configFile}" ]] && jq -e '.outbounds[0].type == "direct"' "${configFile}" >/dev/null 2>&1; then
                 local currentStrategy=$(jq -r '.outbounds[0].domain_strategy // empty' "${configFile}" 2>/dev/null)
+                jq ".outbounds[0].domain_strategy = "${domainStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
                 if [[ -n "${currentStrategy}" ]]; then
-                    jq ".outbounds[0].domain_strategy = "${domainStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
-                    echoContent green " ---> 已更新 $(basename ${configFile}): ${currentStrategy} -> ${domainStrategy}"
+                    echoContent green " ---> 已更新 $(basename "${configFile}"): ${currentStrategy} -> ${domainStrategy}"
+                else
+                    echoContent green " ---> 已设置 $(basename "${configFile}"): ${domainStrategy}"
                 fi
             fi
         done
@@ -7722,24 +7724,26 @@ refreshIP() {
         for configFile in ${configPath}*.json; do
             if [[ -f "${configFile}" ]] && jq -e '.outbounds[0].protocol == "freedom"' "${configFile}" >/dev/null 2>&1; then
                 local currentStrategy=$(jq -r '.outbounds[0].settings.domainStrategy // empty' "${configFile}" 2>/dev/null)
+                local xrayStrategy=""
+                case ${domainStrategy} in
+                "prefer_ipv4")
+                    xrayStrategy="UseIPv4"
+                    ;;
+                "prefer_ipv6")
+                    xrayStrategy="UseIPv6"
+                    ;;
+                "ipv4_only")
+                    xrayStrategy="ForceIPv4"
+                    ;;
+                "ipv6_only")
+                    xrayStrategy="ForceIPv6"
+                    ;;
+                esac
+                jq ".outbounds[0].settings.domainStrategy = "${xrayStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
                 if [[ -n "${currentStrategy}" ]]; then
-                    local xrayStrategy=""
-                    case ${domainStrategy} in
-                    "prefer_ipv4")
-                        xrayStrategy="UseIPv4"
-                        ;;
-                    "prefer_ipv6")
-                        xrayStrategy="UseIPv6"
-                        ;;
-                    "ipv4_only")
-                        xrayStrategy="ForceIPv4"
-                        ;;
-                    "ipv6_only")
-                        xrayStrategy="ForceIPv6"
-                        ;;
-                    esac
-                    jq ".outbounds[0].settings.domainStrategy = "${xrayStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
-                    echoContent green " ---> 已更新 $(basename ${configFile}): ${currentStrategy} -> ${xrayStrategy}"
+                    echoContent green " ---> 已更新 $(basename "${configFile}"): ${currentStrategy} -> ${xrayStrategy}"
+                else
+                    echoContent green " ---> 已设置 $(basename "${configFile}"): ${xrayStrategy}"
                 fi
             fi
         done
