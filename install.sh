@@ -4,6 +4,11 @@
 # 检查系统
 export LANG=en_US.UTF-8
 
+# 修复退格键在部分终端显示异常字符的问题
+if [ -t 0 ]; then
+    stty erase '^?' 2>/dev/null || stty erase '^H' 2>/dev/null
+fi
+
 echoContent() {
     case $1 in
     # 红色
