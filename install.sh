@@ -357,7 +357,8 @@ readAcmeTLS() {
     fi
 
     dnsTLSDomain=$(echo "${readAcmeDomain}" | awk -F "." '{$1="";print $0}' | sed 's/^[[:space:]]*//' | sed 's/ /./g')
-    if [[ -d "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc" && -f "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc/*.${dnsTLSDomain}.key" && -f "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc/*.${dnsTLSDomain}.cer" ]]; then
+    local acmeDir=$(echo "$HOME/.acme.sh/"*".${dnsTLSDomain}_ecc" 2>/dev/null)
+    if [[ -d "${acmeDir}" && -f "${acmeDir}/.${dnsTLSDomain}.key" && -f "${acmeDir}/.${dnsTLSDomain}.cer" ]]; then
         installedDNSAPIStatus=true
     fi
 }
@@ -1843,7 +1844,7 @@ checkDomainResolution() {
         return 1
     fi
 
-    if [[ "${domainIP}" =~ ${v4} ]] || [[ "${domainIP}" =~ ${v6} ]]; then
+    if { [[ -n "${v4}" ]] && [[ "${domainIP}" =~ ${v4} ]]; } || { [[ -n "${v6}" ]] && [[ "${domainIP}" =~ ${v6} ]]; }; then
         echoContent green " ---> 域名解析IP(${domainIP})与VPS IP匹配"
         return 0
     else
@@ -2043,7 +2044,7 @@ setupCertRenewalCron() {
     # 移除旧的续期任务
     crontab -l 2>/dev/null | grep -v "acme.sh.*cron.*renew\|v2ray-agent.*RenewTLS" | crontab - 2>/dev/null
     # 添加新的续期任务（每天凌晨检查一次）
-    (crontab -l 2>/dev/null; echo "0 0 * * * root bash ~/.acme.sh/acme.sh --cron -f >/dev/null 2>&1") | crontab - 2>/dev/null
+    (crontab -l 2>/dev/null; echo "0 0 * * * bash ~/.acme.sh/acme.sh --cron -f >/dev/null 2>&1") | crontab - 2>/dev/null
     echoContent green " ---> 证书自动续期已设置（每天0点检查）"
 }
 
@@ -2528,7 +2529,8 @@ renewalTLS() {
         modifyTime=
 
         if [[ "${installedDNSAPIStatus}" == "true" ]]; then
-            modifyTime=$(stat --format=%z "$HOME/.acme.sh/*.${dnsTLSDomain}_ecc/*.${dnsTLSDomain}.cer")
+            local certFile=$(echo "$HOME/.acme.sh/"*".${dnsTLSDomain}_ecc/"*".${dnsTLSDomain}.cer" 2>/dev/null)
+            modifyTime=$(stat --format=%z "${certFile}")
         else
             modifyTime=$(stat --format=%z "$HOME/.acme.sh/${domain}_ecc/${domain}.cer")
         fi
@@ -10501,7 +10503,7 @@ menu() {
         btTools 1
         ;;
     14)
-        switchAlpn 1
+        refreshIP
         ;;
     15)
         blacklist 1
