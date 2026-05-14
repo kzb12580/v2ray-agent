@@ -29,7 +29,7 @@ echoContent() {
         ${echoType} "\033[37m${printN}$2 \033[0m"
         ;;
     "magenta")
-        ${echoType} "\033[31m${printN}$2 \033[0m"
+        ${echoType} "\033[35m${printN}$2 \033[0m"
         ;;
         # 黄色
     "yellow")
@@ -75,7 +75,7 @@ checkSystem() {
         upgrade="apk update"
         removeType='apk del'
         nginxConfigPath=/etc/nginx/http.d/
-    elif { [[ -f "/etc/issue" ]] && grep -qi "debian" /etc/issue; } || { [[ -f "/proc/version" ]] && grep -qi "debian" /proc/version; } || { [[ -f "/etc/os-release" ]] && grep -qi "ID=debian" /etc/issue; }; then
+    elif { [[ -f "/etc/issue" ]] && grep -qi "debian" /etc/issue; } || { [[ -f "/proc/version" ]] && grep -qi "debian" /proc/version; } || { [[ -f "/etc/os-release" ]] && grep -qi "ID=debian" /etc/os-release; }; then
         release="debian"
         installType='apt -y install'
         upgrade="apt update"
@@ -2238,7 +2238,7 @@ installTLS() {
             echoContent yellow "\n ---> 不采用API申请证书"
             echoContent green " ---> 安装TLS证书，需要依赖80端口"
             # 自动释放80端口
-            releasePort80
+            releasePort80 || return 1
             allowPort 80
         fi
 
@@ -3107,7 +3107,7 @@ initXrayClients() {
     local newEmail=$3
     if [[ -n "${newUUID}" ]]; then
         local newUser=
-        newUser="{\"id\":\"${uuid}\",\"flow\":\"xtls-rprx-vision\",\"email\":\"${newEmail}-VLESS_TCP/TLS_Vision\"}"
+        newUser="{\"id\":\"${newUUID}\",\"flow\":\"xtls-rprx-vision\",\"email\":\"${newEmail}-VLESS_TCP/TLS_Vision\"}"
         currentClients=$(echo "${currentClients}" | jq -r ". +=[${newUser}]")
     fi
     local users=
@@ -3592,30 +3592,6 @@ initTuicProtocol() {
 #}
 
 # 初始化singbox route配置
-initSingBoxRouteConfig() {
-    downloadSingBoxGeositeDB
-    local outboundTag=$1
-    if [[ ! -f "${singBoxConfigPath}${outboundTag}_route.json" ]]; then
-        cat <<EOF >"${singBoxConfigPath}${outboundTag}_route.json"
-{
-    "route": {
-        "geosite": {
-            "path": "${singBoxConfigPath}geosite.db"
-        },
-        "rules": [
-            {
-                "domain": [
-                ],
-                "geosite": [
-                ],
-                "outbound": "${outboundTag}"
-            }
-        ]
-    }
-}
-EOF
-    fi
-}
 # 下载sing-box geosite db
 downloadSingBoxGeositeDB() {
     if [[ ! -f "${singBoxConfigPath}geosite.db" ]]; then
@@ -4048,67 +4024,6 @@ singBoxMergeConfig() {
     rm /etc/v2ray-agent/sing-box/conf/config.json >/dev/null 2>&1
     /etc/v2ray-agent/sing-box/sing-box merge config.json -C /etc/v2ray-agent/sing-box/conf/config/ -D /etc/v2ray-agent/sing-box/conf/ >/dev/null 2>&1
 }
-
-# 初始化Xray Trojan XTLS 配置文件
-#initXrayFrontingConfig() {
-#    echoContent red " ---> Trojan暂不支持 xtls-rprx-vision"
-#    if [[ -z "${configPath}" ]]; then
-#        echoContent red " ---> 未安装，请使用脚本安装"
-#        menu
-#        exit 0
-#    fi
-#    if [[ "${coreInstallType}" != "1" ]]; then
-#        echoContent red " ---> 未安装可用类型"
-#    fi
-#    local xtlsType=
-#    if echo ${currentInstallProtocolType} | grep -q trojan; then
-#        xtlsType=VLESS
-#    else
-#        xtlsType=Trojan
-#    fi
-#
-#    echoContent skyBlue "\n功能 1/${totalProgress} : 前置切换为${xtlsType}"
-#    echoContent red "\n=============================================================="
-#    echoContent yellow "# 注意事项\n"
-#    echoContent yellow "会将前置替换为${xtlsType}"
-#    echoContent yellow "如果前置是Trojan，查看账号时则会出现两个Trojan协议的节点，有一个不可用xtls"
-#    echoContent yellow "再次执行可切换至上一次的前置\n"
-#
-#    echoContent yellow "1.切换至${xtlsType}"
-#    echoContent red "=============================================================="
-#    read -r -p "请选择:" selectType
-#    if [[ "${selectType}" == "1" ]]; then
-#
-#        if [[ "${xtlsType}" == "Trojan" ]]; then
-#
-#            local VLESSConfig
-#            VLESSConfig=$(cat ${configPath}${frontingType}.json)
-#            VLESSConfig=${VLESSConfig//"id"/"password"}
-#            VLESSConfig=${VLESSConfig//VLESSTCP/TrojanTCPXTLS}
-#            VLESSConfig=${VLESSConfig//VLESS/Trojan}
-#            VLESSConfig=${VLESSConfig//"vless"/"trojan"}
-#            VLESSConfig=${VLESSConfig//"id"/"password"}
-#
-#            echo "${VLESSConfig}" | jq . >${configPath}02_trojan_TCP_inbounds.json
-#            rm ${configPath}${frontingType}.json
-#        elif [[ "${xtlsType}" == "VLESS" ]]; then
-#
-#            local VLESSConfig
-#            VLESSConfig=$(cat ${configPath}02_trojan_TCP_inbounds.json)
-#            VLESSConfig=${VLESSConfig//"password"/"id"}
-#            VLESSConfig=${VLESSConfig//TrojanTCPXTLS/VLESSTCP}
-#            VLESSConfig=${VLESSConfig//Trojan/VLESS}
-#            VLESSConfig=${VLESSConfig//"trojan"/"vless"}
-#            VLESSConfig=${VLESSConfig//"password"/"id"}
-#
-#            echo "${VLESSConfig}" | jq . >${configPath}02_VLESS_TCP_inbounds.json
-#            rm ${configPath}02_trojan_TCP_inbounds.json
-#        fi
-#        reloadCore
-#    fi
-#
-#    exit 0
-#}
 
 # 初始化sing-box端口
 initSingBoxPort() {
@@ -10062,19 +9977,6 @@ initRealityMldsa65() {
     fi
 }
 # 检查reality域名是否符合
-checkRealityDest() {
-    local traceResult=
-    traceResult=$(curl -s "https://$(echo "${realityDestDomain}" | cut -d ':' -f 1)/cdn-cgi/trace" | grep "visit_scheme=https")
-    if [[ -n "${traceResult}" ]]; then
-        echoContent red "\n ---> 检测到使用的域名，托管在cloudflare并开启了代理，使用此类型域名可能导致VPS流量被其他人使用[不建议使用]\n"
-        read -r -p "是否继续 ？[y/n]" setRealityDestStatus
-        if [[ "${setRealityDestStatus}" != 'y' ]]; then
-            exit 0
-        fi
-        echoContent yellow "\n ---> 忽略风险，继续使用"
-    fi
-}
-
 # 初始化客户端可用的ServersName
 initRealityClientServersName() {
     local realityDestDomainList=
