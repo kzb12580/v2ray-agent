@@ -1772,13 +1772,113 @@ customSSLEmail() {
     fi
 
 }
-# DNS API申请证书
+# ============================================================
+# 证书申请模块 v2.0 — 整合 acme-yg 优势
+# 支持：Cloudflare / Aliyun / DNSPod，IPv4/IPv6 自动检测，
+#       WARP 自动处理，80端口自动释放，域名解析验证
+# ============================================================
+
+# IPv4/IPv6 自动检测
+detectIPType() {
+    local v4 v6
+    v4=$(curl -s4m5 icanhazip.com -k 2>/dev/null)
+    v6=$(curl -s6m5 icanhazip.com -k 2>/dev/null)
+    if [[ -z "${v4}" && -n "${v6}" ]]; then
+        ipType="6"
+        sslIPv6="--listen-v6"
+        echoContent green " ---> 检测到纯IPv6 VPS"
+    elif [[ -n "${v4}" && -n "${v6}" ]]; then
+        ipType="46"
+        sslIPv6=""
+        echoContent green " ---> 检测到双栈VPS (IPv4: ${v4}, IPv6: ${v6})"
+    else
+        ipType="4"
+        sslIPv6=""
+        echoContent green " ---> 检测到纯IPv4 VPS (${v4})"
+    fi
+}
+
+# 域名解析IP验证
+checkDomainResolution() {
+    local domainIP
+    local v4 v6
+    v4=$(curl -s4m5 icanhazip.com -k 2>/dev/null)
+    v6=$(curl -s6m5 icanhazip.com -k 2>/dev/null)
+
+    domainIP=$(dig @8.8.8.8 +time=2 +short "$1" 2>/dev/null | grep -m1 '^[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+$')
+    if [[ -z "${domainIP}" ]]; then
+        domainIP=$(dig @2001:4860:4860::8888 +time=2 aaaa +short "$1" 2>/dev/null | grep -m1 ':')
+    fi
+
+    if [[ -z "${domainIP}" ]]; then
+        echoContent red " ---> 域名 $1 未解析到任何IP"
+        echoContent yellow " ---> 请检查域名DNS解析是否已完成"
+        return 1
+    fi
+
+    if [[ "${domainIP}" =~ ${v4} ]] || [[ "${domainIP}" =~ ${v6} ]]; then
+        echoContent green " ---> 域名解析IP(${domainIP})与VPS IP匹配"
+        return 0
+    else
+        echoContent red " ---> 域名解析IP(${domainIP})与VPS IP不匹配"
+        echoContent yellow " ---> VPS IPv4: ${v4:-无}"
+        echoContent yellow " ---> VPS IPv6: ${v6:-无}"
+        echoContent yellow " ---> 请确保："
+        echoContent yellow "     1. CF CDN黄云已关闭（仅DNS）"
+        echoContent yellow "     2. 域名解析指向正确的VPS IP"
+        echoContent yellow "     3. WARP未干扰IP判断"
+        return 1
+    fi
+}
+
+# WARP 自动处理
+warpAutoHandle() {
+    local wgcfv4 wgcfv6
+    wgcfv4=$(curl -s4m6 https://www.cloudflare.com/cdn-cgi/trace -k 2>/dev/null | grep warp | cut -d= -f2)
+    wgcfv6=$(curl -s6m6 https://www.cloudflare.com/cdn-cgi/trace -k 2>/dev/null | grep warp | cut -d= -f2)
+    if [[ "${wgcfv4}" =~ on|plus ]] || [[ "${wgcfv6}" =~ on|plus ]]; then
+        echoContent yellow " ---> 检测到WARP已开启，临时关闭以申请证书"
+        systemctl stop wg-quick@wgcf >/dev/null 2>&1
+        kill -15 $(pgrep warp-go) >/dev/null 2>&1
+        sleep 2
+        warpRestartNeeded=true
+    fi
+}
+
+warpAutoRestore() {
+    if [[ "${warpRestartNeeded}" == "true" ]]; then
+        echoContent yellow " ---> 恢复WARP连接"
+        systemctl start wg-quick@wgcf >/dev/null 2>&1
+        systemctl restart warp-go >/dev/null 2>&1
+        systemctl enable warp-go >/dev/null 2>&1
+        systemctl start warp-go >/dev/null 2>&1
+        warpRestartNeeded=false
+    fi
+}
+
+# 80端口自动释放
+releasePort80() {
+    if [[ -n $(lsof -i :80 2>/dev/null | grep -v "PID") ]]; then
+        echoContent yellow " ---> 检测到80端口被占用，自动释放中"
+        lsof -i :80 | grep -v "PID" | awk '{print "kill -9",$2}' | sh >/dev/null 2>&1
+        sleep 1
+        if [[ -n $(lsof -i :80 2>/dev/null | grep -v "PID") ]]; then
+            echoContent red " ---> 80端口释放失败，请手动停止占用80端口的进程"
+            return 1
+        fi
+        echoContent green " ---> 80端口已释放"
+    fi
+    return 0
+}
+
+# DNS API申请证书 — 支持 Cloudflare / Aliyun / DNSPod
 switchDNSAPI() {
-    read -r -p "是否使用DNS API申请证书[支持NAT]？[y/n]:" dnsAPIStatus
+    read -r -p "是否使用DNS API申请证书[支持NAT/内网]？[y/n]:" dnsAPIStatus
     if [[ "${dnsAPIStatus}" == "y" ]]; then
         echoContent red "\n=============================================================="
-        echoContent yellow "1.cloudflare[默认]"
-        echoContent yellow "2.aliyun"
+        echoContent yellow "1.Cloudflare[默认]"
+        echoContent yellow "2.阿里云Aliyun"
+        echoContent yellow "3.腾讯云DNSPod"
         echoContent red "=============================================================="
         read -r -p "请选择[回车]使用默认:" selectDNSAPIType
         case ${selectDNSAPIType} in
@@ -1788,6 +1888,9 @@ switchDNSAPI() {
         2)
             dnsAPIType="aliyun"
             ;;
+        3)
+            dnsAPIType="dnspod"
+            ;;
         *)
             dnsAPIType="cloudflare"
             ;;
@@ -1795,6 +1898,7 @@ switchDNSAPI() {
         initDNSAPIConfig "${dnsAPIType}"
     fi
 }
+
 # 初始化dns配置
 initDNSAPIConfig() {
     if [[ "$1" == "cloudflare" ]]; then
@@ -1805,11 +1909,11 @@ initDNSAPIConfig() {
             initDNSAPIConfig "$1"
         else
             echo
-            if ! echo "${dnsTLSDomain}" | grep -q "\." || [[ -z $(echo "${dnsTLSDomain}" | awk -F "[.]" '{print $1}') ]]; then
+            if ! echo "${dnsTLSDomain}" | grep -q "\\." || [[ -z $(echo "${dnsTLSDomain}" | awk -F "[.]" '{print $1}') ]]; then
                 echoContent green " ---> 不支持此域名申请通配符证书，建议使用此格式[xx.xx.xx]"
                 exit 0
             fi
-            read -r -p "是否使用*.${dnsTLSDomain}进行API申请通配符证书？[y/n]:" dnsAPIStatus
+            read -r -p "是否使用*.${dnsTLSDomain}进行API申请通配符证书？[y/n]:" dnsAPIWildcard
         fi
     elif [[ "$1" == "aliyun" ]]; then
         read -r -p "请输入Ali Key:" aliKey
@@ -1819,14 +1923,30 @@ initDNSAPIConfig() {
             initDNSAPIConfig "$1"
         else
             echo
-            if ! echo "${dnsTLSDomain}" | grep -q "\." || [[ -z $(echo "${dnsTLSDomain}" | awk -F "[.]" '{print $1}') ]]; then
+            if ! echo "${dnsTLSDomain}" | grep -q "\\." || [[ -z $(echo "${dnsTLSDomain}" | awk -F "[.]" '{print $1}') ]]; then
                 echoContent green " ---> 不支持此域名申请通配符证书，建议使用此格式[xx.xx.xx]"
                 exit 0
             fi
-            read -r -p "是否使用*.${dnsTLSDomain}进行API申请通配符证书？[y/n]:" dnsAPIStatus
+            read -r -p "是否使用*.${dnsTLSDomain}进行API申请通配符证书？[y/n]:" dnsAPIWildcard
+        fi
+    elif [[ "$1" == "dnspod" ]]; then
+        echoContent yellow "\n DNSPod参考：https://console.dnspod.cn/account/token\n"
+        read -r -p "请输入DNSPod DP_Id:" dpId
+        read -r -p "请输入DNSPod DP_Key:" dpKey
+        if [[ -z "${dpId}" || -z "${dpKey}" ]]; then
+            echoContent red " ---> 输入为空，请重新输入"
+            initDNSAPIConfig "$1"
+        else
+            echo
+            if ! echo "${dnsTLSDomain}" | grep -q "\\." || [[ -z $(echo "${dnsTLSDomain}" | awk -F "[.]" '{print $1}') ]]; then
+                echoContent green " ---> 不支持此域名申请通配符证书，建议使用此格式[xx.xx.xx]"
+                exit 0
+            fi
+            read -r -p "是否使用*.${dnsTLSDomain}进行API申请通配符证书？[y/n]:" dnsAPIWildcard
         fi
     fi
 }
+
 # 选择ssl安装类型
 switchSSLType() {
     if [[ -z "${sslType}" ]]; then
@@ -1860,43 +1980,46 @@ switchSSLType() {
 
 # 选择acme安装证书方式
 selectAcmeInstallSSL() {
-    #    local sslIPv6=
-    #    local currentIPType=
-    if [[ "${ipType}" == "6" ]]; then
-        sslIPv6="--listen-v6"
-    fi
-    #    currentIPType=$(curl -s "-${ipType}" http://www.cloudflare.com/cdn-cgi/trace | grep "ip" | cut -d "=" -f 2)
-
-    #    if [[ -z "${currentIPType}" ]]; then
-    #                currentIPType=$(curl -s -6 http://www.cloudflare.com/cdn-cgi/trace | grep "ip" | cut -d "=" -f 2)
-    #        if [[ -n "${currentIPType}" ]]; then
-    #            sslIPv6="--listen-v6"
-    #        fi
-    #    fi
-
+    detectIPType
     acmeInstallSSL
-
     readAcmeTLS
 }
 
 # 安装SSL证书
 acmeInstallSSL() {
     local dnsAPIDomain="${tlsDomain}"
-    if [[ "${dnsAPIStatus}" == "y" ]]; then
+    if [[ "${dnsAPIWildcard}" == "y" ]]; then
         dnsAPIDomain="*.${dnsTLSDomain}"
     fi
 
     if [[ "${dnsAPIType}" == "cloudflare" ]]; then
-        echoContent green " ---> DNS API 生成证书中"
+        echoContent green " ---> Cloudflare DNS API 生成证书中"
         sudo CF_Token="${cfAPIToken}" "$HOME/.acme.sh/acme.sh" --issue -d "${dnsAPIDomain}" -d "${dnsTLSDomain}" --dns dns_cf -k ec-256 --server "${sslType}" ${sslIPv6} 2>&1 | tee -a /etc/v2ray-agent/tls/acme.log >/dev/null
     elif [[ "${dnsAPIType}" == "aliyun" ]]; then
-        echoContent green " --->  DNS API 生成证书中"
+        echoContent green " ---> 阿里云 DNS API 生成证书中"
         sudo Ali_Key="${aliKey}" Ali_Secret="${aliSecret}" "$HOME/.acme.sh/acme.sh" --issue -d "${dnsAPIDomain}" -d "${dnsTLSDomain}" --dns dns_ali -k ec-256 --server "${sslType}" ${sslIPv6} 2>&1 | tee -a /etc/v2ray-agent/tls/acme.log >/dev/null
+    elif [[ "${dnsAPIType}" == "dnspod" ]]; then
+        echoContent green " ---> 腾讯云DNSPod API 生成证书中"
+        sudo DP_Id="${dpId}" DP_Key="${dpKey}" "$HOME/.acme.sh/acme.sh" --issue -d "${dnsAPIDomain}" -d "${dnsTLSDomain}" --dns dns_dp -k ec-256 --server "${sslType}" ${sslIPv6} 2>&1 | tee -a /etc/v2ray-agent/tls/acme.log >/dev/null
     else
-        echoContent green " ---> 生成证书中"
-        sudo "$HOME/.acme.sh/acme.sh" --issue -d "${tlsDomain}" --standalone -k ec-256 --server "${sslType}" ${sslIPv6} 2>&1 | tee -a /etc/v2ray-agent/tls/acme.log >/dev/null
+        echoContent green " ---> 独立80端口模式生成证书中"
+        if [[ "${ipType}" == "6" ]]; then
+            sudo "$HOME/.acme.sh/acme.sh" --issue -d "${tlsDomain}" --standalone -k ec-256 --server "${sslType}" --listen-v6 2>&1 | tee -a /etc/v2ray-agent/tls/acme.log >/dev/null
+        else
+            sudo "$HOME/.acme.sh/acme.sh" --issue -d "${tlsDomain}" --standalone -k ec-256 --server "${sslType}" 2>&1 | tee -a /etc/v2ray-agent/tls/acme.log >/dev/null
+        fi
     fi
 }
+
+# 设置证书自动续期 cron
+setupCertRenewalCron() {
+    # 移除旧的续期任务
+    crontab -l 2>/dev/null | grep -v "acme.sh.*cron.*renew\|v2ray-agent.*RenewTLS" | crontab - 2>/dev/null
+    # 添加新的续期任务（每天凌晨检查一次）
+    (crontab -l 2>/dev/null; echo "0 0 * * * root bash ~/.acme.sh/acme.sh --cron -f >/dev/null 2>&1") | crontab - 2>/dev/null
+    echoContent green " ---> 证书自动续期已设置（每天0点检查）"
+}
+
 # 自定义端口
 customPortFunction() {
     local historyCustomPortStatus=
@@ -1968,6 +2091,19 @@ installTLS() {
     readAcmeTLS
     local tlsDomain=${domain}
 
+    # WARP 自动处理（避免IP判断干扰）
+    warpAutoHandle
+
+    # 域名解析验证
+    if ! checkDomainResolution "${tlsDomain}"; then
+        echoContent yellow " ---> 域名解析验证未通过，是否继续？[y/n]"
+        read -r -p "请选择:" continueStatus
+        if [[ "${continueStatus}" != "y" ]]; then
+            warpAutoRestore
+            exit 0
+        fi
+    fi
+
     # 安装tls
     if [[ -f "/etc/v2ray-agent/tls/${tlsDomain}.crt" && -f "/etc/v2ray-agent/tls/${tlsDomain}.key" && -n $(cat "/etc/v2ray-agent/tls/${tlsDomain}.crt") ]] || [[ -d "$HOME/.acme.sh/${tlsDomain}_ecc" && -f "$HOME/.acme.sh/${tlsDomain}_ecc/${tlsDomain}.key" && -f "$HOME/.acme.sh/${tlsDomain}_ecc/${tlsDomain}.cer" ]] || [[ "${installedDNSAPIStatus}" == "true" ]]; then
         echoContent green " ---> 检测到证书"
@@ -1998,6 +2134,8 @@ installTLS() {
         if [[ -z "${dnsAPIType}" ]]; then
             echoContent yellow "\n ---> 不采用API申请证书"
             echoContent green " ---> 安装TLS证书，需要依赖80端口"
+            # 自动释放80端口
+            releasePort80
             allowPort 80
         fi
 
@@ -2015,6 +2153,7 @@ installTLS() {
             tail -n 10 /etc/v2ray-agent/tls/acme.log
             if [[ ${installTLSCount} == "1" ]]; then
                 echoContent red " ---> TLS安装失败，请检查acme日志"
+                warpAutoRestore
                 exit 0
             fi
 
@@ -2031,11 +2170,18 @@ installTLS() {
             fi
         fi
 
+        # 设置证书自动续期
+        setupCertRenewalCron
+
         echoContent green " ---> TLS生成成功"
     else
         echoContent yellow " ---> 未安装acme.sh"
+        warpAutoRestore
         exit 0
     fi
+
+    # 恢复WARP
+    warpAutoRestore
 }
 
 # 初始化随机字符串
