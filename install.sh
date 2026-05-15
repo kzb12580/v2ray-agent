@@ -1002,12 +1002,7 @@ showInstallStatus() {
         if echo ${currentInstallProtocolType} | grep -q ",9,"; then
             echoContent yellow "Tuic \c"
         fi
-        if echo ${currentInstallProtocolType} | grep -q ",10,"; then
-            # Naive removed
-        fi
-        if echo ${currentInstallProtocolType} | grep -q ",11,"; then
-            # VMess+TLS+HTTPUpgrade removed
-        fi
+        # protocol 10 (Naive) and 11 (VMess+HTTPUpgrade) removed
         if echo ${currentInstallProtocolType} | grep -q ",12,"; then
             echoContent yellow "VLESS+Reality+XHTTP \c"
         fi
@@ -4794,11 +4789,8 @@ EOF
         rm /etc/v2ray-agent/sing-box/conf/config/09_tuic_inbounds.json >/dev/null 2>&1
     fi
 
-    if echo "${selectCustomInstallType}" | grep -q ",10," || [[ "$1" == "all" ]]; then
-        # Naive installation removed
-    if echo "${selectCustomInstallType}" | grep -q ",11," || [[ "$1" == "all" ]]; then
-        # VMess+HTTPUpgrade installation removed
-        echoContent yellow " ---> VMess+HTTPUpgrade 已被移除"
+    if echo "${selectCustomInstallType}" | grep -q ",10," || echo "${selectCustomInstallType}" | grep -q ",11," || [[ "$1" == "all" ]]; then
+        echoContent yellow " ---> Naive/VMess+HTTPUpgrade 已被移除"
 
     if echo "${selectCustomInstallType}" | grep -q ",13," || [[ "$1" == "all" ]]; then
         echoContent yellow "\n================== 配置 AnyTLS ==================\n"
