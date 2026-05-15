@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 
 # 修复退格键在部分终端显示异常字符的问题
 if [ -t 0 ]; then
-    stty erase '^?' 2>/dev/null || stty erase '^H' 2>/dev/null
+    stty erase "$(printf '\177')" 2>/dev/null || stty erase "$(printf '\010')" 2>/dev/null
 fi
 
 echoContent() {
@@ -343,6 +343,8 @@ initVar() {
     # 上次安装配置状态
     lastInstallationConfig=
 
+    # WARP状态标记
+    warpRestartNeeded=false
 }
 
 # 读取tls证书详情
@@ -2226,7 +2228,9 @@ installTLS() {
                     read -r -p "是否重新安装？[y/n]:" reInstallStatus
                     if [[ "${reInstallStatus}" == "y" ]]; then
                         rm -rf /etc/v2ray-agent/tls/*
+                        warpAutoRestore
                         installTLS "$1"
+                        return
                     fi
                 fi
             fi
@@ -2238,7 +2242,7 @@ installTLS() {
             echoContent yellow "\n ---> 不采用API申请证书"
             echoContent green " ---> 安装TLS证书，需要依赖80端口"
             # 自动释放80端口
-            releasePort80 || return 1
+            releasePort80 || { warpAutoRestore; return 1; }
             allowPort 80
         fi
 
