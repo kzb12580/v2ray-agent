@@ -8088,7 +8088,7 @@ cronFunction() {
 # 账号管理
 
 # showAccounts别名（兼容上游调用）
-showAccounts() { subscribe; }
+showAccounts() { :; }
 
 manageAccount() {
     echoContent skyBlue "\n功能 1/${totalProgress} : 账号管理"
