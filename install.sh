@@ -9471,7 +9471,11 @@ unInstall() {
     systemctl daemon-reload
     rm -f /root/install.sh /usr/local/bin/vasma 2>/dev/null
     echoContent green " ---> 卸载完成"
-}
+
+# 占位函数（上游缺失）
+updateNginxBlog() { echoContent yellow " ---> 伪装站管理功能待完善"; }
+manageCDN() { echoContent yellow " ---> CDN节点管理功能待完善"; }
+addCorePort() { echoContent yellow " ---> 添加新端口功能待完善"; }}
 
 
 cronFunction
