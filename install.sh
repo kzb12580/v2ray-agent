@@ -5505,9 +5505,7 @@ removeUser() {
             tuicResult=$(jq -r 'del(.inbounds[0].users['"${delUserIndex}"'])' "${singBoxConfigPath}09_tuic_inbounds.json")
             echo "${tuicResult}" | jq . >"${singBoxConfigPath}09_tuic_inbounds.json"
         fi
-        if echo ${currentInstallProtocolType} | grep -q ",10,"; then
-            # naive and VMess HTTPUpgrade user deletion removed
-        fi
+        # protocol 10 and 11 user deletion removed
         # AnyTLS
         if echo ${currentInstallProtocolType} | grep -q ",13,"; then
             local anyTLSResult
