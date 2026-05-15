@@ -1740,8 +1740,8 @@ customSSLEmail() {
 # IPv4/IPv6 自动检测
 detectIPType() {
     local v4 v6
-    v4=$(curl -s4m5 icanhazip.com -k 2>/dev/null)
-    v6=$(curl -s6m5 icanhazip.com -k 2>/dev/null)
+    v4=$(curl -s4m5 icanhazip.com 2>/dev/null)
+    v6=$(curl -s6m5 icanhazip.com 2>/dev/null)
     if [[ -z "${v4}" && -n "${v6}" ]]; then
         ipType="6"
         sslIPv6="--listen-v6"
@@ -1761,8 +1761,8 @@ detectIPType() {
 checkDomainResolution() {
     local domainIP
     local v4 v6
-    v4=$(curl -s4m5 icanhazip.com -k 2>/dev/null)
-    v6=$(curl -s6m5 icanhazip.com -k 2>/dev/null)
+    v4=$(curl -s4m5 icanhazip.com 2>/dev/null)
+    v6=$(curl -s6m5 icanhazip.com 2>/dev/null)
 
     # Freenom 免费域名检测
     local tld
