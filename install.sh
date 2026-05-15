@@ -2077,48 +2077,32 @@ uninstallCertificate() {
 customPortFunction() {
     local historyCustomPortStatus=
     if [[ -n "${customPort}" || -n "${currentPort}" ]]; then
-        echo
         if [[ -z "${lastInstallationConfig}" ]]; then
-            read -r -p "读取到上次安装时的端口，是否使用上次安装时的端口？[y/n]:" historyCustomPortStatus
-            if [[ "${historyCustomPortStatus}" == "y" ]]; then
-                port=${currentPort}
-                echoContent yellow "\n ---> 端口: ${port}"
-            fi
+            port=${currentPort}
         elif [[ -n "${lastInstallationConfig}" ]]; then
             port=${currentPort}
         fi
+        echoContent yellow "\n ---> 使用上次安装端口: ${port}"
     fi
-    if [[ -z "${currentPort}" ]] || [[ "${historyCustomPortStatus}" == "n" ]]; then
-        echo
-
+    if [[ -z "${currentPort}" ]]; then
         if [[ -n "${btDomain}" ]]; then
-            echoContent yellow "请输入端口[不可与BT Panel/1Panel端口相同，回车随机]"
-            read -r -p "端口:" port
-            if [[ -z "${port}" ]]; then
-                port=$((RANDOM % 20001 + 10000))
-            fi
+            port=$((RANDOM % 20001 + 10000))
         else
-            echo
-            echoContent yellow "请输入端口[默认: 443]，可自定义端口[回车使用默认]"
-            read -r -p "端口:" port
-            if [[ -z "${port}" ]]; then
-                port=443
-            fi
+            port=443
             if [[ "${port}" == "${xrayVLESSRealityPort}" ]]; then
                 handleXray stop
             fi
         fi
 
-        if [[ -n "${port}" ]]; then
-            if ((port >= 1 && port <= 65535)); then
-                allowPort "${port}"
-                echoContent yellow "\n ---> 端口: ${port}"
-                if [[ -z "${btDomain}" ]]; then
-                    checkDNSIP "${domain}"
-                    removeNginxDefaultConf
-                    checkPortOpen "${port}" "${domain}"
-                fi
-            else
+        if ((port >= 1 && port <= 65535)); then
+            allowPort "${port}"
+            echoContent yellow "\n ---> 默认端口: ${port}"
+            if [[ -z "${btDomain}" ]]; then
+                checkDNSIP "${domain}"
+                removeNginxDefaultConf
+                checkPortOpen "${port}" "${domain}"
+            fi
+        else
                 echoContent red " ---> 端口输入错误"
                 exit 0
             fi
@@ -2292,22 +2276,11 @@ randomPathFunction() {
 
     if [[ "${historyPathStatus}" == "y" ]]; then
         customPath=${currentPath}
-        echoContent green " ---> 使用成功\n"
+        echoContent green " ---> 使用上次路径: ${customPath}\n"
     else
-        echoContent yellow "请输入自定义路径[例: alone]，不需要斜杠，[回车]随机路径"
-        read -r -p '路径:' customPath
-        if [[ -z "${customPath}" ]]; then
-            initRandomPath
-            currentPath=${customPath}
-        else
-            if [[ "${customPath: -2}" == "ws" ]]; then
-                echo
-                echoContent red " ---> 自定义path结尾不可用ws结尾，否则无法区分分流路径"
-                randomPathFunction "$1"
-            else
-                currentPath=${customPath}
-            fi
-        fi
+        initRandomPath
+        currentPath=${customPath}
+        echoContent green " ---> 随机路径: ${currentPath}"
     fi
     echoContent yellow "\n path:${currentPath}"
     echoContent skyBlue "\n----------------------------"
@@ -3972,30 +3945,27 @@ singBoxMergeConfig() {
 # 初始化sing-box端口
 initSingBoxPort() {
     local port=$1
-    if [[ -n "${port}" && -z "${lastInstallationConfig}" ]]; then
-        read -r -p "读取到上次使用的端口，是否使用 ？[y/n]:" historyPort
-        if [[ "${historyPort}" != "y" ]]; then
-            port=
-        else
-            echo "${port}"
-        fi
-    elif [[ -n "${port}" && -n "${lastInstallationConfig}" ]]; then
+    if [[ -n "${port}" && -n "${lastInstallationConfig}" ]]; then
         echo "${port}"
+        return
     fi
     if [[ -z "${port}" ]]; then
-        read -r -p '请输入自定义端口[需合法]，端口不可重复，[回车]随机端口:' port
-        if [[ -z "${port}" ]]; then
-            port=$((RANDOM % 50001 + 10000))
-        fi
-        if ((port >= 1 && port <= 65535)); then
-            allowPort "${port}"
-            allowPort "${port}" "udp"
-            echo "${port}"
-        else
-            echoContent red " ---> 端口输入错误"
-            exit 0
-        fi
+        port=$((RANDOM % 50001 + 10000))
     fi
+    # 端口合规检测
+    if ! [[ "${port}" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
+        echoContent red " ---> 端口不合法: ${port}"
+        exit 1
+    fi
+    # 端口冲突检测
+    if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+        echoContent yellow " ---> 端口 ${port} 已被占用，重新分配"
+        port=$((RANDOM % 50001 + 10000))
+    fi
+    allowPort "${port}"
+    allowPort "${port}" "udp"
+    echoContent green " ---> 分配端口: ${port}"
+    echo "${port}"
 }
 
 # 初始化Xray 配置文件
