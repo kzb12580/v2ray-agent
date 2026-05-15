@@ -3213,6 +3213,18 @@ initHysteria2Network() {
     fi
 }
 
+# 读取hysteria2端口跳跃配置
+readHysteriaPortHopping() {
+    if [[ -n "${hysteriaPort}" ]]; then
+        if iptables-save | grep -q "mack-a_hysteria2_portHopping"; then
+            portHopping=
+            portHopping=$(iptables-save | grep "mack-a_hysteria2_portHopping" | cut -d " " -f 8)
+            portHoppingStart=$(echo "${portHopping}" | cut -d ":" -f 1)
+            portHoppingEnd=$(echo "${portHopping}" | cut -d ":" -f 2)
+        fi
+    fi
+}
+
 # firewalld设置端口跳跃
 addFirewalldPortHopping() {
 
