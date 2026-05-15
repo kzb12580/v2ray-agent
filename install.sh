@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # 检测区
 # -------------------------------------------------------------
 # 检查系统
@@ -8086,6 +8086,10 @@ cronFunction() {
     fi
 }
 # 账号管理
+
+# showAccounts别名（兼容上游调用）
+showAccounts() { subscribe; }
+
 manageAccount() {
     echoContent skyBlue "\n功能 1/${totalProgress} : 账号管理"
     if [[ -z "${configPath}" ]]; then
