@@ -574,7 +574,6 @@ readInstallProtocolType() {
         fi
         # naive_inbounds removed
         # VMess_HTTPUpgrade_inbounds removed
-        fi
         if echo "${row}" | grep -q anytls_inbounds; then
             currentInstallProtocolType="${currentInstallProtocolType}13,"
             if [[ "${coreInstallType}" == "2" ]]; then
@@ -2092,13 +2091,6 @@ customPortFunction() {
             checkDNSIP "${domain}"
             removeNginxDefaultConf
             checkPortOpen "${port}" "${domain}"
-        fi
-                echoContent red " ---> 端口输入错误"
-                exit 0
-            fi
-        else
-            echoContent red " ---> 端口不可为空"
-            exit 0
         fi
     fi
 }
