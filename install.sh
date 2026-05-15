@@ -9453,6 +9453,26 @@ menu() {
         ;;
     esac
 }
+# uninstall别名（兼容上游调用）
+unInstall() {
+    echoContent red "\n=============================================================="
+    echoContent yellow "确认卸载所有组件？[y/n]"
+    read -r -p "请选择:" confirmUninstall
+    if [[ "${confirmUninstall}" != "y" ]]; then
+        echoContent yellow " ---> 已取消"
+        return
+    fi
+    echoContent green " ---> 开始卸载..."
+    systemctl stop sing-box xray nginx 2>/dev/null
+    systemctl disable sing-box xray 2>/dev/null
+    rm -rf /etc/v2ray-agent /etc/systemd/system/sing-box.service /etc/systemd/system/xray.service 2>/dev/null
+    rm -f /etc/nginx/conf.d/subscribe.conf /etc/nginx/conf.d/alone.conf /etc/nginx/conf.d/sing* 2>/dev/null
+    apt purge -y nginx 2>/dev/null || yum remove -y nginx 2>/dev/null || apk del nginx 2>/dev/null
+    systemctl daemon-reload
+    rm -f /root/install.sh /usr/local/bin/vasma 2>/dev/null
+    echoContent green " ---> 卸载完成"
+}
+
 
 cronFunction
 menu
