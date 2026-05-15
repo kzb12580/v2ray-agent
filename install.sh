@@ -5404,7 +5404,6 @@ addUser() {
             echo "${clients}" | jq . >"${singBoxConfigPath}09_tuic_inbounds.json"
         fi
         # naive and VMess HTTPUpgrade user management removed
-        fi
         # anytls
         if echo "${currentInstallProtocolType}" | grep -q ",13,"; then
             local clients=
