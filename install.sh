@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # 检测区
 # -------------------------------------------------------------
 # 检查系统
@@ -539,7 +539,7 @@ readInstallProtocolType() {
 
                 frontingTypeReality=07_VLESS_vision_reality_inbounds
 
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 frontingTypeReality=07_VLESS_vision_reality_inbounds
                 singBoxVLESSRealityVisionPort=$(jq -r .inbounds[0].listen_port "${row}.json")
                 singBoxVLESSRealityVisionServerName=$(jq -r .inbounds[0].tls.server_name "${row}.json")
@@ -883,7 +883,7 @@ readConfigHostPathUUID() {
             fi
             currentPath=$(jq -r .inbounds[0].streamSettings.xhttpSettings.path ${configPath}12_VLESS_XHTTP_inbounds.json | awk -F "[/]" '{print $2}' | awk -F "[x][H][T][T][P]" '{print $1}')
         fi
-    elif [[ "${coreInstallType}" == "2" ]]; then
+    if [[ "\${coreInstallType}" == "2" ]]; then
         if [[ -n "${frontingType}" ]]; then
             currentHost=$(jq -r .inbounds[0].tls.server_name ${configPath}${frontingType}.json)
             # sing_box_VMess_HTTPUpgrade host ref removed
@@ -2454,7 +2454,7 @@ renewalTLS() {
 
             if [[ "${coreInstallType}" == "1" ]]; then
                 handleXray stop
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 handleSingBox stop
             fi
 
@@ -5261,7 +5261,7 @@ addUser() {
     local userConfig=
     if [[ "${coreInstallType}" == "1" ]]; then
         userConfig=".inbounds[0].settings.clients"
-    elif [[ "${coreInstallType}" == "2" ]]; then
+    if [[ "\${coreInstallType}" == "2" ]]; then
         userConfig=".inbounds[0].users"
     fi
 
@@ -5281,7 +5281,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 0 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 0 "${uuid}" "${email}")
             fi
             clients=$(jq -r "${userConfig} = ${clients}" ${configPath}02_VLESS_TCP_inbounds.json)
@@ -5293,7 +5293,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 1 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 1 "${uuid}" "${email}")
             fi
 
@@ -5306,7 +5306,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 2 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 2 "${uuid}" "${email}")
             fi
 
@@ -5318,7 +5318,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 3 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 3 "${uuid}" "${email}")
             fi
 
@@ -5330,7 +5330,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 4 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 4 "${uuid}" "${email}")
             fi
             clients=$(jq -r "${userConfig} = ${clients}" ${configPath}04_trojan_TCP_inbounds.json)
@@ -5342,7 +5342,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 5 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 5 "${uuid}" "${email}")
             fi
             clients=$(jq -r "${userConfig} = ${clients}" ${configPath}06_VLESS_gRPC_inbounds.json)
@@ -5356,7 +5356,7 @@ addUser() {
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 7 "${uuid}" "${email}")
                 realityUserConfig=".inbounds[1].settings.clients"
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 7 "${uuid}" "${email}")
                 realityUserConfig=".inbounds[0].users"
             fi
@@ -5369,7 +5369,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 8 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 8 "${uuid}" "${email}")
             fi
             clients=$(jq -r "${userConfig} = ${clients}" ${configPath}08_VLESS_vision_gRPC_inbounds.json)
@@ -5395,7 +5395,7 @@ addUser() {
             local clients=
             if [[ "${coreInstallType}" == "1" ]]; then
                 clients=$(initXrayClients 9 "${uuid}" "${email}")
-            elif [[ "${coreInstallType}" == "2" ]]; then
+            if [[ "\${coreInstallType}" == "2" ]]; then
                 clients=$(initSingBoxClients 9 "${uuid}" "${email}")
             fi
 
@@ -5434,7 +5434,7 @@ removeUser() {
         else
             delUserIndex=$((delUserIndex - 1))
         fi
-    elif [[ "${coreInstallType}" == "2" ]]; then
+    if [[ "\${coreInstallType}" == "2" ]]; then
         jq -r -c .inbounds[0].users[].name//.inbounds[0].users[].username ${configPath}${frontingType:-$frontingTypeReality}.json | awk '{print NR""":"$0}'
         read -r -p "请选择要删除的用户编号[仅支持单个删除]:" delUserIndex
         if [[ $(jq -r '.inbounds[0].users|length' ${configPath}${frontingType:-$frontingTypeReality}.json) -lt ${delUserIndex} ]]; then
@@ -9165,7 +9165,7 @@ manageReality() {
     if [[ "${coreInstallType}" == "1" ]]; then
         selectCustomInstallType=",7,"
         initXrayConfig custom 1 true
-    elif [[ "${coreInstallType}" == "2" ]]; then
+    if [[ "\${coreInstallType}" == "2" ]]; then
         if echo "${currentInstallProtocolType}" | grep -q ",7,"; then
             selectCustomInstallType=",7,"
         fi
