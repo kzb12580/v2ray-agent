@@ -2074,16 +2074,10 @@ uninstallCertificate() {
 
 # 自定义端口
 customPortFunction() {
-    local historyCustomPortStatus=
-    if [[ -n "${customPort}" || -n "${currentPort}" ]]; then
-        if [[ -z "${lastInstallationConfig}" ]]; then
-            port=${currentPort}
-        elif [[ -n "${lastInstallationConfig}" ]]; then
-            port=${currentPort}
-        fi
+    if [[ -n "${currentPort}" ]]; then
+        port=${currentPort}
         echoContent yellow "\n ---> 使用上次安装端口: ${port}"
-    fi
-    if [[ -z "${currentPort}" ]]; then
+    else
         port=$(_gen_unique_port)
         allowPort "${port}"
         echoContent yellow "\n ---> 随机端口: ${port}"
@@ -3934,7 +3928,10 @@ _reserved_ports="22 80 81 443 307 8080 8443 9090 3306 5432 6379 27017"
 # 生成不重复的随机端口（10000-65535）
 _gen_unique_port() {
     local port
-    while :; do
+    local max_attempts=500
+    local attempt=0
+    while ((attempt < max_attempts)); do
+        attempt=$((attempt + 1))
         port=$((RANDOM % 55536 + 10000))
         # 跳过保留端口
         if echo " ${_reserved_ports} " | grep -q " ${port} "; then
@@ -3952,6 +3949,8 @@ _gen_unique_port() {
         echo "${port}"
         return
     done
+    echoContent red " ---> 未找到可用端口(尝试500次)"
+    exit 1
 }
 
 initSingBoxPort() {
