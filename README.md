@@ -38,7 +38,42 @@ Xray-core/sing-box 一键脚本快速安装（精简加固版）
 - **IP 配置管理（菜单 14）**: IPv4/IPv6 出站策略切换
 - **退格键修复**: 修复部分终端退格键乱码
 
-### 🧹 Bug修复
+### 🧹 Bug修复（v3.5.17 全面审查）
+
+**严重Bug修复:**
+| Bug | 修复 |
+|-----|------|
+| `showAccounts` 被覆盖为空操作 | 从 git 历史恢复完整实现，修复账号显示和订阅系统失效 |
+| x25519 密钥解析 grep 模式错误 | `PrivateKey`→`Private key`, `Password`→`Public key` |
+| `initRealityClientServersName` if/elif 条件相同 | elif 条件改为 `-n`，修复死代码 |
+| Hysteria2 上传/下载速度赋值反转 | 交换 `up_mbps`/`down_mbps` 赋值 |
+| `unInstallSingBox` 无条件删除 config.json | 添加 `type` 非空检查 |
+| nginx 裸调用阻塞脚本 | 改为 `nginx -t 2>&1` |
+| systemd `$MAINPID` 被 bash 空展开 | 转义为 `\$MAINPID` |
+| iptables 删除错误规则 | 反向排序行号 + 使用 `${line}` 替代硬编码 `1` |
+| TUIC QR 码端口未定义 | `tuicPort`→`${port}` |
+| TUIC Clash Meta SNI 设为邮箱 | 改为 `${currentHost}` |
+| jq 语法缺少 `]` (trojan gRPC) | 补全闭合方括号 |
+| `routingRule` 未定义 | 改为 `domainRules` |
+| `selectCustomInstallType` elif 死代码 | 添加 `! grep ",2,"` 条件 |
+
+**中等Bug修复:**
+| Bug | 修复 |
+|-----|------|
+| 随机字符集缺少字母 `s` | `abcdefghijklmnopqrtuxyz`→`abcdefghijklmnopqrstuvwxyz` |
+| `rm -rf` 通配符不展开 | 移除引号让 glob 生效 |
+| `portHoppingMenu` 递归丢失 `type` 参数 | 添加 `"${type}"` |
+| `installSingBox` 递归丢失 prereleaseStatus | 添加 `"$2"` |
+| `rm` 不带 `-f` 选项 | 统一使用 `rm -f` |
+| 脚本更新先删后下载 | 改为原子替换（先下载再覆盖） |
+| grep 部分匹配导致去重错误 | 改用 `-qF` 固定字符串匹配 |
+| Clash Meta DNS `1.12.12.12` 错误 | 改为 `223.6.6.6` |
+| sing-box Trojan gRPC `insecure:true` | 改为 `false` |
+| `warpRoutingReg` 无效时未退出 | 添加 `return 1` |
+| `readHysteriaPortHopping` 函数缺失 | 从 git 历史恢复 |
+| nginx 配置文件缺失 | 手动创建 `subscribe.conf` + `alone.conf` |
+
+**原有Bug修复（保留）:**
 | Bug | 修复 |
 |-----|------|
 | `refreshIP`(菜单 14) jq 引用错误 | `--arg` 传参替代内联展开 |
@@ -52,7 +87,7 @@ Xray-core/sing-box 一键脚本快速安装（精简加固版）
 | WARP 状态未初始化 | 添加 `warpRestartNeeded=false` |
 | UUID 变量名错误 | `uuid` → `newUUID` |
 | 证书续期缺少 WARP 处理 | `renewalTLS` 添加 WARP 恢复 |
-| 退格键乱码 | 改用 `printf '\177'` |
+| 退格键乱码 | 改用 `printf '\\177'` |
 
 ### 🧹 代码清理
 - **移除推广广告**: 删除主菜单 VPS 推广区
