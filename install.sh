@@ -4789,6 +4789,7 @@ EOF
 
     if echo "${selectCustomInstallType}" | grep -q ",10," || echo "${selectCustomInstallType}" | grep -q ",11," || [[ "$1" == "all" ]]; then
         echoContent yellow " ---> Naive/VMess+HTTPUpgrade 已被移除"
+    fi
 
     if echo "${selectCustomInstallType}" | grep -q ",13," || [[ "$1" == "all" ]]; then
         echoContent yellow "\n================== 配置 AnyTLS ==================\n"
