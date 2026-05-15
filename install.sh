@@ -5261,6 +5261,23 @@ EOF
             echoContent red " ---> email不可重复"
             exit 0
         fi
+    elif [[ "${type}" == "anytls" ]]; then
+
+        echoContent yellow " ---> 通用格式(AnyTLS)"
+        echoContent green "    anytls://${id}@${currentHost}:${port}?security=tls&sni=${currentHost}&fp=chrome#${email}\n"
+
+        echoContent yellow " ---> 格式化明文(AnyTLS)"
+        echoContent green "协议类型:AnyTLS，地址:${currentHost}，端口:${port}，密码:${id}，SNI:${currentHost}，账户名:${email}\n"
+
+        cat <<EOF >>"/etc/v2ray-agent/subscribe_local/default/${user}"
+anytls://${id}@${currentHost}:${port}?security=tls&sni=${currentHost}&fp=chrome#${email}
+EOF
+
+        singBoxSubscribeLocalConfig=$(jq -r ". += [{\"tag\":\"${email}\",\"type\":\"anytls\",\"server\":\"${currentHost}\",\"server_port\":${port},\"password\":\"${id}\",\"tls\":{\"enabled\":true,\"server_name\":\"${currentHost}\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}]" "/etc/v2ray-agent/subscribe_local/sing-box/${user}")
+        echo "${singBoxSubscribeLocalConfig}" | jq . >"/etc/v2ray-agent/subscribe_local/sing-box/${user}"
+
+        echoContent yellow " ---> 二维码 AnyTLS"
+        echoContent green "    https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=anytls%3A%2F%2F${id}%40${currentHost}%3A${port}%3Fsecurity%3Dtls%26sni%3D${currentHost}%26fp%3Dchrome%23${email}\n"
     fi
 }
 
@@ -8369,6 +8386,20 @@ showAccounts() {
                     count=$((count + 1))
                 fi
             done < <(echo "${currentCDNAddress}" | tr ',' '\n')
+        done
+    fi
+
+    # AnyTLS
+    if echo ${currentInstallProtocolType} | grep -q ",13," || [[ -n "${singBoxAnyTLSPort}" ]]; then
+        echoContent skyBlue "\n================================  AnyTLS TLS [推荐]  ================================\n"
+        local path="${configPath}"
+        if [[ "${coreInstallType}" == "1" ]]; then
+            path="${singBoxConfigPath}"
+        fi
+        jq -r -c '.inbounds[]|.users[]' "${path}13_anytls_inbounds.json" | while read -r user; do
+            echoContent skyBlue "\n ---> 账号:$(echo "${user}" | jq -r .name)"
+            echo
+            defaultBase64Code anytls "${singBoxAnyTLSPort}" "$(echo "${user}" | jq -r .name)" "$(echo "${user}" | jq -r .password)"
         done
     fi
 }
