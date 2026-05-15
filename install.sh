@@ -1844,7 +1844,7 @@ checkDomainResolution() {
         return 1
     fi
 
-    if { [[ -n "${v4}" ]] && [[ "${domainIP}" =~ ${v4} ]]; } || { [[ -n "${v6}" ]] && [[ "${domainIP}" =~ ${v6} ]]; }; then
+    if { [[ -n "${v4}" ]] && [[ "${domainIP}" == "${v4}" ]]; } || { [[ -n "${v6}" ]] && [[ "${domainIP}" == "${v6}" ]]; }; then
         echoContent green " ---> 域名解析IP(${domainIP})与VPS IP匹配"
         return 0
     else
@@ -1888,7 +1888,7 @@ warpAutoRestore() {
 releasePort80() {
     if [[ -n $(lsof -i :80 2>/dev/null | grep -v "PID") ]]; then
         echoContent yellow " ---> 检测到80端口被占用，自动释放中"
-        lsof -i :80 | grep -v "PID" | awk '{print "kill -9",$2}' | sh >/dev/null 2>&1
+        lsof -i :80 | grep -v "PID" | awk '{print $2}' | xargs -r kill -9 >/dev/null 2>&1
         sleep 1
         if [[ -n $(lsof -i :80 2>/dev/null | grep -v "PID") ]]; then
             echoContent red " ---> 80端口释放失败，请手动停止占用80端口的进程"
@@ -7709,7 +7709,7 @@ refreshIP() {
         for configFile in ${singBoxConfigPath}*.json; do
             if [[ -f "${configFile}" ]] && jq -e '.outbounds[0].type == "direct"' "${configFile}" >/dev/null 2>&1; then
                 local currentStrategy=$(jq -r '.outbounds[0].domain_strategy // empty' "${configFile}" 2>/dev/null)
-                jq ".outbounds[0].domain_strategy = "${domainStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
+                jq --arg s "${domainStrategy}" '.outbounds[0].domain_strategy = $s' "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
                 if [[ -n "${currentStrategy}" ]]; then
                     echoContent green " ---> 已更新 $(basename "${configFile}"): ${currentStrategy} -> ${domainStrategy}"
                 else
@@ -7739,7 +7739,7 @@ refreshIP() {
                     xrayStrategy="ForceIPv6"
                     ;;
                 esac
-                jq ".outbounds[0].settings.domainStrategy = "${xrayStrategy}"" "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
+                jq --arg s "${xrayStrategy}" '.outbounds[0].settings.domainStrategy = $s' "${configFile}" > "${configFile}_tmp" && mv "${configFile}_tmp" "${configFile}"
                 if [[ -n "${currentStrategy}" ]]; then
                     echoContent green " ---> 已更新 $(basename "${configFile}"): ${currentStrategy} -> ${xrayStrategy}"
                 else
