@@ -2085,24 +2085,14 @@ customPortFunction() {
         echoContent yellow "\n ---> 使用上次安装端口: ${port}"
     fi
     if [[ -z "${currentPort}" ]]; then
-        if [[ -n "${btDomain}" ]]; then
-            port=$((RANDOM % 20001 + 10000))
-        else
-            port=443
-            if [[ "${port}" == "${xrayVLESSRealityPort}" ]]; then
-                handleXray stop
-            fi
+        port=$(_gen_unique_port)
+        allowPort "${port}"
+        echoContent yellow "\n ---> 随机端口: ${port}"
+        if [[ -z "${btDomain}" ]]; then
+            checkDNSIP "${domain}"
+            removeNginxDefaultConf
+            checkPortOpen "${port}" "${domain}"
         fi
-
-        if ((port >= 1 && port <= 65535)); then
-            allowPort "${port}"
-            echoContent yellow "\n ---> 默认端口: ${port}"
-            if [[ -z "${btDomain}" ]]; then
-                checkDNSIP "${domain}"
-                removeNginxDefaultConf
-                checkPortOpen "${port}" "${domain}"
-            fi
-        else
                 echoContent red " ---> 端口输入错误"
                 exit 0
             fi
@@ -3943,25 +3933,43 @@ singBoxMergeConfig() {
 }
 
 # 初始化sing-box端口
+# 已分配端口列表（安装过程中跟踪，避免重复）
+declare -a _allocated_ports=()
+
+# 保留端口（系统服务/常见服务端口）
+_reserved_ports="22 80 81 443 307 8080 8443 9090 3306 5432 6379 27017"
+
+# 生成不重复的随机端口（10000-65535）
+_gen_unique_port() {
+    local port
+    while :; do
+        port=$((RANDOM % 55536 + 10000))
+        # 跳过保留端口
+        if echo " ${_reserved_ports} " | grep -q " ${port} "; then
+            continue
+        fi
+        # 跳过已分配端口
+        if [[ " ${_allocated_ports[*]} " =~ " ${port} " ]]; then
+            continue
+        fi
+        # 跳过已占用端口
+        if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+            continue
+        fi
+        _allocated_ports+=("${port}")
+        echo "${port}"
+        return
+    done
+}
+
 initSingBoxPort() {
     local port=$1
     if [[ -n "${port}" && -n "${lastInstallationConfig}" ]]; then
+        _allocated_ports+=("${port}")
         echo "${port}"
         return
     fi
-    if [[ -z "${port}" ]]; then
-        port=$((RANDOM % 50001 + 10000))
-    fi
-    # 端口合规检测
-    if ! [[ "${port}" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
-        echoContent red " ---> 端口不合法: ${port}"
-        exit 1
-    fi
-    # 端口冲突检测
-    if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
-        echoContent yellow " ---> 端口 ${port} 已被占用，重新分配"
-        port=$((RANDOM % 50001 + 10000))
-    fi
+    port=$(_gen_unique_port)
     allowPort "${port}"
     allowPort "${port}" "udp"
     echoContent green " ---> 分配端口: ${port}"
