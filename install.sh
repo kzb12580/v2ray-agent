@@ -3147,8 +3147,6 @@ initSingBoxClients() {
         fi
 
         # naive and VMess HTTPUpgrade removed
-            users=$(echo "${users}" | jq -r ". +=[${currentUser}]")
-        fi
         # anytls
         if echo "${type}" | grep -q ",13,"; then
             currentUser="{\"password\":\"${uuid}\",\"name\":\"${name}-anytls\"}"
